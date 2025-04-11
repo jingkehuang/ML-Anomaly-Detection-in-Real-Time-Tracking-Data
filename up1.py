@@ -105,9 +105,10 @@ def main():
     # Step 2: Detect anomalies
     df = detect_anomalies(df)
 
-    # Step 3: Evaluate and print anomaly detection performance(optional)
+    # Step 3: Evaluate and print anomaly detection performance
     # Combine Z-score and moving average anomalies (1 if either method flags an anomaly)
     df['Combined_Anomaly'] = df[['Speed_mps_Z_Anomaly', 'Speed_mps_MA_Anomaly']].max(axis=1)
+
 
     # Compare detected anomalies with ground truth
     print("Classification Report:")
@@ -119,7 +120,7 @@ def main():
     prediction_accuracy = (correct_predictions / total_predictions) * 100
     print(f"Prediction Accuracy: {prediction_accuracy:.2f}%")
 
-    # Step 3: Create and run the dashboard
+    # Step 5: Create and run the dashboard
     app = create_dashboard(df)
     app.run_server(debug=True)
 

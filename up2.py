@@ -18,42 +18,56 @@ df['Hour'] = df['Timestamp'].dt.hour
 df['Day'] = df['Timestamp'].dt.day
 df['Month'] = df['Timestamp'].dt.month
 
+# Split data into first two days (X1) and last day (X2)
+split_date = df['Timestamp'].max() - pd.DateOffset(days=1)
+X1 = df[df['Timestamp'] <= split_date]
+X2 = df[df['Timestamp'] > split_date]
+
 # Drop the original 'Timestamp' column if not needed
-df.drop('Timestamp', axis=1, inplace=True)
+X1 = X1.drop('Timestamp', axis=1)
+X2 = X2.drop('Timestamp', axis=1)
 
 # Step 2: Train the Isolation Forest model
 # Prepare the feature set (exclude the 'Anomaly_Flag' column)
-X = df.drop('Anomaly_Flag', axis=1)
+X1_train = X1.drop('Anomaly_Flag', axis=1)
+X2_test = X2.drop('Anomaly_Flag', axis=1)
 
 # Initialize the Isolation Forest model
 # Set contamination to the expected proportion of anomalies in the data
 model = IsolationForest(contamination=0.04, random_state=42)
 
 # Fit the model
-model.fit(X)
+model.fit(X1_train)
 
 # Predict anomalies (-1 for anomalies, 1 for normal)
-df['Anomaly_Prediction'] = model.predict(X)
+X2['Anomaly_Prediction'] = model.predict(X2_test)
 
 # Convert predictions to binary (1 for normal, 0 for anomaly)
-df['Anomaly_Prediction'] = df['Anomaly_Prediction'].apply(lambda x: 0 if x == -1 else 1)
+X2['Anomaly_Prediction'] = X2['Anomaly_Prediction'].apply(lambda x: 0 if x == -1 else 1)
 
 # Convert 'Anomaly_Flag' to binary (1 for normal, 0 for anomaly)
-df['Anomaly_Flag'] = df['Anomaly_Flag'].apply(lambda x: 1 if x == 'Normal' else 0)
+X2['Anomaly_Flag'] = X2['Anomaly_Flag'].apply(lambda x: 1 if x == 'Normal' else 0)
 
-# print Anomaly_Prediction and Anomaly_Flag value counts for comparison
-print(df['Anomaly_Flag'].value_counts())
-print(df['Anomaly_Prediction'].value_counts())
+# Print prediction array for X2
+# prediction_array = ''.join(X2['Anomaly_Prediction'].astype(str).values)
+# print("\nX2 Anomaly Predictions Array:")
+# print(prediction_array)
 
-print("Classification Report:")
-print(classification_report(df['Anomaly_Flag'], df['Anomaly_Prediction']))
+# Print Anomaly_Prediction and Anomaly_Flag value counts for comparison
+print("\nAnomaly_Flag Value Counts:")
+print(X2['Anomaly_Flag'].value_counts())
+print("\nAnomaly_Prediction Value Counts:")
+print(X2['Anomaly_Prediction'].value_counts())
+
+# Print classification report
+print("\nClassification Report:")
+print(classification_report(X2['Anomaly_Flag'], X2['Anomaly_Prediction']))
 
 # Calculate prediction accuracy
-correct_predictions = (df['Anomaly_Flag'] == df['Anomaly_Prediction']).sum()
-total_predictions = len(df)
+correct_predictions = (X2['Anomaly_Flag'] == X2['Anomaly_Prediction']).sum()
+total_predictions = len(X2)
 prediction_accuracy = (correct_predictions / total_predictions) * 100
-print(f"Prediction Accuracy: {prediction_accuracy:.2f}%")
-
+print(f"\nPrediction Accuracy: {prediction_accuracy:.2f}%")
 
 # Step 3: Create an interactive dashboard
 # Initialize the Dash app
@@ -61,7 +75,7 @@ app = dash.Dash(__name__)
 
 # Define the layout of the dashboard
 app.layout = html.Div([
-    html.H1("Anomaly Detection Dashboard", style={'textAlign': 'center'}),
+    html.H1("Anomaly Detection Dashboard (X2 Predictions)", style={'textAlign': 'center'}),
     
     # Dropdown for filtering by location (Latitude and Longitude)
     html.Label("Filter by Location:"),
@@ -69,20 +83,20 @@ app.layout = html.Div([
         html.Label("Latitude Range:"),
         dcc.RangeSlider(
             id='latitude-slider',
-            min=df['Latitude'].min(),
-            max=df['Latitude'].max(),
+            min=X2['Latitude'].min(),
+            max=X2['Latitude'].max(),
             step=0.01,
-            marks={i: f'{i:.2f}' for i in range(int(df['Latitude'].min()), int(df['Latitude'].max()) + 1)},
-            value=[df['Latitude'].min(), df['Latitude'].max()]
+            marks={i: f'{i:.2f}' for i in range(int(X2['Latitude'].min()), int(X2['Latitude'].max()) + 1)},
+            value=[X2['Latitude'].min(), X2['Latitude'].max()]
         ),
         html.Label("Longitude Range:"),
         dcc.RangeSlider(
             id='longitude-slider',
-            min=df['Longitude'].min(),
-            max=df['Longitude'].max(),
+            min=X2['Longitude'].min(),
+            max=X2['Longitude'].max(),
             step=0.01,
-            marks={i: f'{i:.2f}' for i in range(int(df['Longitude'].min()), int(df['Longitude'].max()) + 1)},
-            value=[df['Longitude'].min(), df['Longitude'].max()]
+            marks={i: f'{i:.2f}' for i in range(int(X2['Longitude'].min()), int(X2['Longitude'].max()) + 1)},
+            value=[X2['Longitude'].min(), X2['Longitude'].max()]
         ),
     ]),
     
@@ -112,9 +126,9 @@ app.layout = html.Div([
 )
 def update_graph(latitude_range, longitude_range, time_filter):
     # Filter data based on latitude and longitude
-    filtered_df = df[
-        (df['Latitude'] >= latitude_range[0]) & (df['Latitude'] <= latitude_range[1]) &
-        (df['Longitude'] >= longitude_range[0]) & (df['Longitude'] <= longitude_range[1])
+    filtered_df = X2[
+        (X2['Latitude'] >= latitude_range[0]) & (X2['Latitude'] <= latitude_range[1]) &
+        (X2['Longitude'] >= longitude_range[0]) & (X2['Longitude'] <= longitude_range[1])
     ]
     
     # Group data by the selected time filter and count anomalies (0)
@@ -125,7 +139,7 @@ def update_graph(latitude_range, longitude_range, time_filter):
         grouped_df,
         x=time_filter,
         y='Anomaly_Prediction',
-        title=f'Anomalies by {time_filter}',
+        title=f'X2 Anomalies by {time_filter}',
         labels={'Anomaly_Prediction': 'Number of Anomalies'}
     )
     
